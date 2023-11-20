@@ -40,7 +40,7 @@ def extract_features(df: pd.DataFrame):
         "If today is rainy then ‘Yes’. If today is not rainy then ‘No’.",
         "Evaporation during a particular day.",
         "Bright sunshine during a particular day.",
-        "The direction of the strongest gust during a particular day.",
+        "The direction of the strongest gust during a particular day. (16 compass points)",
         "The direction of the strongest gust during a particular day.",
         "Speed of strongest gust during a particular day."
         "The direction of the wind for 10 min prior to 9 am.",
@@ -53,6 +53,31 @@ def extract_features(df: pd.DataFrame):
         "Atmospheric pressure at 3 pm.",
         "Cloud-obscured portions of the sky at 9 am."
         "Cloud-obscured portions of the sky at 3 pm."
+    ]
+
+    description = [
+        "Unique ID of observations.",
+        "Name of the city from Australia.",
+        "The minimum temperature during a particular day.",
+        "The maximum temperature during a particular day.",
+        "Rainfall during a particular day.",
+        "Evaporation during a particular day.",
+        "Bright sunshine during a particular day.",
+        "The direction of the strongest gust during a particular day. (16 compass points)",
+        "Speed of strongest gust during a particular day.",
+        "The direction of the wind for 10 min prior to 9 am.",
+        "The direction of the wind for 10 min prior to 3 pm.",
+        "Speed of the wind for 10 min prior to 9 am."
+        "Speed of the wind for 10 min prior to 3 pm."
+        "The humidity of the wind at 9 am."
+        "The humidity of the wind at 3 pm.",
+        "Atmospheric pressure at 9 am. ",
+        "Atmospheric pressure at 3 pm.",
+        "Cloud-obscured portions of the sky at 9 am.",
+        "Cloud-obscured portions of the sky at 3 pm.",
+        "The temperature at 9 am.",
+        "The temperature at 3 pm."
+        "If today is rainy then ‘Yes’. If today is not rainy then ‘No’."
     ]
 
     return column_types
