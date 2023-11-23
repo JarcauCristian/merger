@@ -1,10 +1,12 @@
 import pandas as pd
+import glob
 import numpy as np
+import matplotlib.pyplot as plt
+import shap
 from sklearn.preprocessing import StandardScaler
 from scipy.sparse import csr_matrix
 from scipy.sparse import hstack
-from sklearn.cluster import KMeans, Birch, BisectingKMeans
-from rapidfuzz.fuzz import ratio
+from sklearn.cluster import KMeans, Birch, BisectingKMeans, AgglomerativeClustering
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
@@ -22,16 +24,18 @@ def extract_features(df: pd.DataFrame, file_name: str) -> pd.DataFrame:
     means = {}
     stds = {}
     for column in columns:
-        if len(df[column].unique()) == len(df) - 2:
+        if len(df[column].unique()) == len(df):
             column_types[column] = "unique identifier"
+            means[column] = 0
+            stds[column] = 0
         else:
             column_types[column] = df[column].dtype.name
-            if pd.api.types.is_numeric_dtype(df[column]):
-                means[column] = df[column].mean()
-                stds[column] = df[column].std()
-            else:
-                means[column] = 0
-                stds[column] = 0
+        if pd.api.types.is_numeric_dtype(df[column]):
+            means[column] = df[column].mean()
+            stds[column] = df[column].std()
+        else:
+            means[column] = 0
+            stds[column] = 0
 
     unique_values = {}
 
@@ -71,10 +75,21 @@ def prepare_features(concat_features: pd.DataFrame):
 
     x_names = vectorizer.fit_transform(concat_features["column_name"].tolist())
     x_dtypes = vectorizer.fit_transform(concat_features["column_dtype"].tolist())
-    if len(concat_features["unique_values"].tolist()[0]) > 0:
-        x_unique_values = vectorizer.fit_transform(concat_features["unique_values"].tolist())
 
-        return hstack([x_names, x_dtypes, x_unique_values, x_numerical_sparse])
+    unique_list = concat_features["unique_values"].tolist()
+    has = False
+    for feature in unique_list:
+        if len(feature) > 0:
+            has = True
+            break
+
+    if has:
+        try:
+            x_unique_values = vectorizer.fit_transform(unique_list)
+            return hstack([x_names, x_dtypes, x_unique_values, x_numerical_sparse])
+        except ValueError as e:
+            print("Error: ", e)
+            return hstack([x_names, x_dtypes, x_numerical_sparse])
     else:
         return hstack([x_names, x_dtypes, x_numerical_sparse])
 
@@ -119,33 +134,96 @@ def look_through_clusters(clusters: pd.DataFrame, df1: pd.DataFrame, file_name1:
             print(new_pd)
 
 
-file_name_d1 = "Weather Test Data.csv"
-file_name_d2 = "Weather_Data.csv"
-d1, d2 = read_datasets(file_name_d1, file_name_d2)
+# file_name_d1 = "Weather Test Data.csv"
+# file_name_d2 = "Weather_Data.csv"
+# d1, d2 = read_datasets(file_name_d1, file_name_d2)
+#
+# extracted_features_d1 = extract_features(d1, file_name_d1)
+# extracted_features_d2 = extract_features(d2, file_name_d2)
+#
+# concat = extracted_features_d1.merge(extracted_features_d2, how="outer")
+#
+# prepared_features = prepare_features(concat_features=concat)
+#
+# model = BisectingKMeans(n_clusters=max(len(d1.columns), len(d2.columns)), n_init=10, random_state=42)
+#
+# model.fit(prepared_features)
+# labels_combined_all = model.labels_
+#
+# clustered_data_combined_all = pd.DataFrame({
+#     'column_name': concat["column_name"],
+#     'column_dtype': concat["column_dtype"],
+#     'min_value': concat['min_value'],
+#     'max_value': concat['max_value'],
+#     'mean': concat['mean'],
+#     'std': concat['std'],
+#     'unique_values': concat['unique_values'],
+#     'file_prov': concat['file_prov'],
+#     'cluster': labels_combined_all
+# })
+# clustered_data_combined_all.sort_values('cluster', inplace=True)
+# print(clustered_data_combined_all)
+# look_through_clusters(clustered_data_combined_all, d1, file_name_d1, file_name_d2, d2)
 
-extracted_features_d1 = extract_features(d1, file_name_d1)
-extracted_features_d2 = extract_features(d2, file_name_d2)
+for filename_1 in glob.glob("./*.csv", recursive=True):
+    for filename_2 in glob.glob("./*.csv", recursive=True):
+        print(filename_1, filename_2)
+        d1, d2 = read_datasets(filename_1, filename_2)
+        extracted_features_d1 = extract_features(d1, filename_1)
+        extracted_features_d2 = extract_features(d2, filename_2)
+        concat = pd.concat([extracted_features_d1, extracted_features_d2])
+        prepared_features = prepare_features(concat_features=concat)
+        km = KMeans(n_clusters=max(len(d1.columns), len(d2.columns)), n_init=10, random_state=42)
+        bkm = BisectingKMeans(n_clusters=max(len(d1.columns), len(d2.columns)), n_init=10, random_state=42)
+        br = Birch(n_clusters=max(len(d1.columns), len(d2.columns)), threshold=0.3)
+        ac = AgglomerativeClustering(n_clusters=max(len(d1.columns), len(d2.columns)))
 
-concat = extracted_features_d1.merge(extracted_features_d2, how="outer")
+        km.fit(prepared_features)
+        bkm.fit(prepared_features)
+        br.fit(prepared_features)
+        ac.fit(prepared_features.toarray())
 
-prepared_features = prepare_features(concat_features=concat)
+        km_labels = km.labels_
+        bkm_labels = bkm.labels_
+        br_labels = br.labels_
+        ac_labels = ac.labels_
 
-model = BisectingKMeans(n_clusters=max(len(d1.columns), len(d2.columns)), n_init=10, random_state=42)
+        clustered_data_combined_all = pd.DataFrame({
+            'column_name': concat["column_name"],
+            'column_dtype': concat["column_dtype"],
+            'min_value': concat['min_value'],
+            'max_value': concat['max_value'],
+            'mean': concat['mean'],
+            'std': concat['std'],
+            'unique_values': concat['unique_values'],
+            'file_prov': concat['file_prov'],
+            'km_cluster': km_labels,
+            'bkm_cluster': bkm_labels,
+            'br_cluster': br_labels,
+            'ac_cluster': ac_labels
+        })
+        print(clustered_data_combined_all["file_prov"])
+        clustered_data_combined_all["file_prov"] = clustered_data_combined_all["file_prov"].apply(lambda x: 'r' if x == filename_1 else 'b')
 
-model.fit(prepared_features)
-labels_combined_all = model.labels_
-
-clustered_data_combined_all = pd.DataFrame({
-    'column_name': concat["column_name"],
-    'column_dtype': concat["column_dtype"],
-    'min_value': concat['min_value'],
-    'max_value': concat['max_value'],
-    'mean': concat['mean'],
-    'std': concat['std'],
-    'unique_values': concat['unique_values'],
-    'file_prov': concat['file_prov'],
-    'cluster': labels_combined_all
-})
-clustered_data_combined_all.sort_values('cluster', inplace=True)
-print(clustered_data_combined_all)
-look_through_clusters(clustered_data_combined_all, d1, file_name_d1, file_name_d2, d2)
+        save_file_1 = ''.join(filename_1.split('.')[1:-1]).replace("\\", "")
+        save_file_2 = ''.join(filename_2.split('.')[1:-1]).replace("\\", "")
+        plt.figure(figsize=(20, 5))
+        plt.bar(clustered_data_combined_all.sort_values('km_cluster')["column_name"],
+                clustered_data_combined_all.sort_values('km_cluster')["km_cluster"], color=clustered_data_combined_all["file_prov"])
+        plt.savefig(f"./km/{save_file_1}-{save_file_2}-km.png")
+        plt.close()
+        plt.figure(figsize=(20, 5))
+        plt.bar(clustered_data_combined_all.sort_values('bkm_cluster')["column_name"],
+                clustered_data_combined_all.sort_values('bkm_cluster')["bkm_cluster"], color=clustered_data_combined_all["file_prov"])
+        plt.savefig(f"./bkm/{save_file_1}-{save_file_2}-bkm.png")
+        plt.close()
+        plt.figure(figsize=(20, 5))
+        plt.bar(clustered_data_combined_all.sort_values('br_cluster')["column_name"],
+                clustered_data_combined_all.sort_values('br_cluster')["br_cluster"], color=clustered_data_combined_all["file_prov"])
+        plt.savefig(f"./br/{save_file_1}-{save_file_2}-br.png")
+        plt.close()
+        plt.figure(figsize=(20, 5))
+        plt.bar(clustered_data_combined_all.sort_values('ac_cluster')["column_name"],
+                clustered_data_combined_all.sort_values('ac_cluster')["ac_cluster"], color=clustered_data_combined_all["file_prov"])
+        plt.savefig(f"./ac/{save_file_1}-{save_file_2}-ac.png")
+        plt.close()
